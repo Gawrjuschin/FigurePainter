@@ -23,15 +23,18 @@
 
 #include <QFile>
 
+#include <QTimer>
+
 #include <limits>
+#include <random>
 
 enum CBoxIndexes { CIRCLE, TRIANGLE, SQUARE, NANGLE };
 
-constexpr long MIN_EDGES = 3;
-constexpr long MAX_EDGES = 32;
+constexpr int MIN_EDGES = 3;
+constexpr int MAX_EDGES = 32;
 
-constexpr double MIN_ANGLE = 0;
-constexpr double MAX_ANGLE = 360;
+constexpr int MIN_ANGLE = 0;
+constexpr int MAX_ANGLE = 360;
 
 constexpr double MIN_COORD = 0;
 constexpr double MAX_COORD = 1000;
@@ -39,11 +42,11 @@ constexpr double MAX_COORD = 1000;
 constexpr double MIN_DIAMETER = 2;
 constexpr double MAX_DIAMETER = MAX_COORD / 2;
 
-constexpr long MIN_COLOR = 0;
-constexpr long MAX_COLOR = std::numeric_limits<long>::max();
+constexpr int MIN_COLOR = 0;
+constexpr int MAX_COLOR = std::numeric_limits<int>::max();
 
-constexpr long MIN_WIDTH = 1;
-constexpr long MAX_WIDTH = 32;
+constexpr int MIN_WIDTH = 1;
+constexpr int MAX_WIDTH = 32;
 
 QWidget *FiguresWidget::MakeMenu()
 {
@@ -168,6 +171,16 @@ QWidget *FiguresWidget::MakeMenu()
     connect(save_btn, &QPushButton::clicked, this, &FiguresWidget::onSaveClicked);
   }
 
+  {
+    demo_timer_ = new QTimer(this);
+    connect(demo_timer_, &QTimer::timeout, this, &FiguresWidget::onDemoTimerTick);
+
+    demo_button_ = new QPushButton(tr("Запустить демо"));
+    connect(demo_button_, &QPushButton::clicked, this, &FiguresWidget::onDemoClicked);
+
+    grid_lo->addWidget(demo_button_, 11, 0, 1, 2);
+  }
+
   menu_lo->addStretch(1);
 
   return menu_wdg;
@@ -196,6 +209,9 @@ FiguresWidget::FiguresWidget(QWidget *parent)
     , renderer_(new FiguresRenderer)
     , history_(new FiguresHistory)
 {
+  setWindowTitle("Демонстрационный виджет");
+  setMinimumSize(800, 600);
+
   history_->setWindowTitle(tr("История"));
 
   auto *main_lo = new QHBoxLayout(this);
@@ -248,13 +264,15 @@ void FiguresWidget::onCBoxSwitch(int index)
 
 void FiguresWidget::onAddClicked()
 {
-  FigureParams fig{.coordinates = {double(coord_x_->value()), double(coord_y_->value())},
-		   .radius = (double(diameter_->value()) / 2),
-		   .edges = edges_->value(),
-		   .grad_angle = grad_angle_->value(),
-		   .width = width_->value(),
-		   // За проверку ввода цвета отвечает маска
-		   .color = color_->text().toLong(nullptr, 16)};
+  const FigureParams fig{
+          .coordinates = {double(coord_x_->value()), double(coord_y_->value())},
+          .radius = (double(diameter_->value()) / 2),
+          .edges = edges_->value(),
+          .grad_angle = grad_angle_->value(),
+          .width = width_->value(),
+          // За проверку ввода цвета отвечает маска
+          .color = color_->text().toLong(nullptr, 16)
+  };
   emit sigAddFigures(fig.toBytes());
 }
 
@@ -301,4 +319,46 @@ void FiguresWidget::onSaveClicked()
 
   auto bytes = history_->toBytes();
   figures_file.write(bytes);
+}
+
+void FiguresWidget::onDemoClicked()
+{
+  if(!demo_timer_->isActive())
+  {
+    demo_button_->setEnabled(false);
+    demo_button_->setText("Остановить демо");
+    demo_timer_->start(500);
+    demo_button_->setEnabled(true);
+  }
+  else
+  {
+    demo_button_->setEnabled(false);
+    demo_button_->setText("Запустить демо");
+    demo_timer_->stop();
+    demo_button_->setEnabled(true);
+  }
+}
+
+void FiguresWidget::onDemoTimerTick() {
+  static thread_local std::default_random_engine eng{std::random_device{}()};
+  const auto max_radius = std::min(renderer_->width(), renderer_->height()) / 2;
+  std::uniform_int_distribution coords_width_distr{0, renderer_->width()};
+  std::uniform_int_distribution coords_height_distr{0, renderer_->height()};
+  std::uniform_int_distribution coords_radius_distr{4, max_radius};
+  std::uniform_int_distribution fig_width_distr{MIN_WIDTH, MAX_WIDTH};
+  std::uniform_int_distribution edges_distr{MIN_EDGES, MAX_EDGES};
+  std::uniform_int_distribution angle_distr{MIN_ANGLE, MAX_ANGLE};
+  std::uniform_int_distribution color_distr{MIN_COLOR, MAX_COLOR};
+
+  const FigureParams fig{
+          .coordinates = {double(coords_width_distr(eng)), double(coords_height_distr(eng))},
+          .radius = double(coords_radius_distr(eng)),
+          .edges = edges_distr(eng),
+          .grad_angle = angle_distr(eng),
+          .width = fig_width_distr(eng),
+          // За проверку ввода цвета отвечает маска
+          .color = color_distr(eng)
+  };
+
+  emit sigAddFigures(fig.toBytes());
 }

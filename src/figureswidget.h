@@ -7,6 +7,8 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLineEdit;
 class QSpinBox;
+class QPushButton;
+class QTimer;
 class FiguresRenderer;
 class FiguresModel;
 class FiguresHistory;
@@ -24,6 +26,8 @@ public slots:
   void onAddClicked();
   void onLoadClicked();
   void onSaveClicked();
+  void onDemoClicked();
+  void onDemoTimerTick();
 
 signals:
   void sigAddFigures(QByteArray);
@@ -43,5 +47,7 @@ private:
   QSpinBox *width_;
   FiguresRenderer *renderer_;
   FiguresHistory *history_;
+  QTimer* demo_timer_;
+  QPushButton* demo_button_;
 };
 #endif // FIGURESWIDGET_H
